@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motorcycle Fuel Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #1a73e8;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #1557b0;
+        }
+        .export-btn {
+            background-color: #0f9d58;
+        }
+        .export-btn:hover {
+            background-color: #0b8043;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        .summary {
+            margin-top: 20px;
+            background: #e8f0fe;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Moto Fuel Tracker</h2>
+    
+    <div class="form-group">
+        <label for="startKm">Start Mileage (km)</label>
+        <input type="number" id="startKm" placeholder="e.g., 12500">
+    </div>
+    
+    <div class="form-group">
+        <label for="endKm">End Mileage (km)</label>
+        <input type="number" id="endKm" placeholder="e.g., 12850">
+    </div>
+    
+    <div class="form-group">
+        <label for="fuelUsed">Fuel Used (Liters)</label>
+        <input type="number" step="0.1" id="fuelUsed" placeholder="e.g., 15.5">
+    </div>
+    
+    <button onclick="logTrip()">Save Trip</button>
+    <button class="export-btn" onclick="exportToGoogleSheets()">Export to Google Sheets</button>
+
+    <div class="summary" id="summaryBox">
+        Total Distance: 0 km | Total Fuel: 0 L | Avg Economy: 0 L/100km
+    </div>
+
+    <h3>Trip History</h3>
+    <table id="tripTable">
+        <thead>
+            <tr>
+                <th>Distance</th>
+                <th>Fuel (L)</th>
+                <th>Economy</th>
+            </tr>
+        </thead>
+        <tbody id="tripTableBody">
+            <!-- Trips will appear here -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let trips = JSON.parse(localStorage.getItem('moto_trips')) || [];
+
+    function renderTrips() {
+        const tbody = document.getElementById('tripTableBody');
+        tbody.innerHTML = '';
+        let totalDist = 0;
+        let totalFuel = 0;
+
+        trips.forEach(trip => {
+            const distance = trip.endKm - trip.startKm;
+            const economy = distance > 0 ? ((trip.fuelUsed / distance) * 100).toFixed(2) : 0;
+            
+            totalDist += distance;
+            totalFuel += parseFloat(trip.fuelUsed);
+
+            const row = `<tr>
+                <td>${distance} km</td>
+                <td>${trip.fuelUsed} L</td>
+                <td>${economy} L/100km</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+
+        const overallEconomy = totalDist > 0 ? ((totalFuel / totalDist) * 100).toFixed(2) : 0;
+        document.getElementById('summaryBox').innerText = 
+            `Total Distance: ${totalDist} km | Total Fuel: ${totalFuel.toFixed(1)} L | Avg Economy: ${overallEconomy} L/100km`;
+        
+        localStorage.setItem('moto_trips', JSON.stringify(trips));
+    }
+
+    function logTrip() {
+        const startKm = parseFloat(document.getElementById('startKm').value);
+        const endKm = parseFloat(document.getElementById('endKm').value);
+        const fuelUsed = parseFloat(document.getElementById('fuelUsed').value);
+
+        if (isNaN(startKm) || isNaN(endKm) || isNaN(fuelUsed) || endKm <= startKm) {
+            alert('Please enter valid mileage and fuel amounts. End mileage must be greater than start mileage.');
+            return;
+        }
+
+        trips.push({ startKm, endKm, fuelUsed });
+        
+        // Auto-populate next trip's start mileage with the current trip's end mileage for convenience
+        document.getElementById('startKm').value = endKm;
+        document.getElementById('endKm').value = '';
+        document.getElementById('fuelUsed').value = '';
+
+        renderTrips();
+    }
+
+    function exportToGoogleSheets() {
+        if (trips.length === 0) {
+            alert('No trips to export!');
+            return;
+        }
+
+        // CSV format is easily copied and pasted directly into Google Sheets
+        let csvContent = "data:text/csv;charset=utf-8,Start Mileage,End Mileage,Distance (km),Fuel Used (L),Economy (L/100km)\n";
+        
+        trips.forEach(trip => {
+            const distance = trip.endKm - trip.startKm;
+            const economy = distance > 0 ? ((trip.fuelUsed / distance) * 100).toFixed(2) : 0;
+            csvContent += `${trip.startKm},${trip.endKm},${distance},${trip.fuelUsed},${economy}\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "moto_fuel_log.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Initial render on load
+    window.onload = renderTrips;
+</script>
+
+</body>
+</html>
